@@ -378,3 +378,26 @@ def test_ensure_running_starts_stopped_vm(tmp_path):
         call[1] == "apply" and "desired_state=running" in str(call)
         for call in backend.calls
     )
+
+
+def test_public_api_importable():
+    from azure_vm import (
+        AzureClient,
+        AzureVM,
+        AzureVmError,
+        AzureVmCommandError,
+        TofuNotInstalledError,
+        VmNotFoundError,
+        VmAlreadyRunningError,
+        VmNotRunningError,
+        AzureVmTimeoutError,
+        SshConnectionError,
+        VmInfo,
+        VmState,
+        ImageInfo,
+        CommandResult,
+        FakeBackend,
+        TofuBackend,
+    )
+    assert AzureClient is not None
+    assert AzureVM is not None
