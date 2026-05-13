@@ -5,13 +5,11 @@ from .exceptions import (
     AzureVmCommandError,
     TofuNotInstalledError,
     VmNotFoundError,
-    VmAlreadyRunningError,
-    VmNotRunningError,
     AzureVmTimeoutError,
     SshConnectionError,
 )
 from .models import VmInfo, VmState, ImageInfo
-from ._backend import CommandResult, FakeBackend, TofuBackend
+from ._backend import CommandResult
 
 __all__ = [
     "AzureClient",
@@ -20,14 +18,10 @@ __all__ = [
     "AzureVmCommandError",
     "TofuNotInstalledError",
     "VmNotFoundError",
-    "VmAlreadyRunningError",
-    "VmNotRunningError",
     "AzureVmTimeoutError",
     "SshConnectionError",
     "VmInfo",
     "VmState",
     "ImageInfo",
     "CommandResult",
-    "FakeBackend",
-    "TofuBackend",
 ]

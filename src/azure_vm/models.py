@@ -40,19 +40,6 @@ class VmInfo:
             resource_group=data.get("resource_group", {}).get("value", ""),
         )
 
-    @classmethod
-    def from_list_item(cls, data: dict) -> "VmInfo":
-        return cls(
-            name=data.get("name", ""),
-            state=VmState(data.get("state", "unknown")),
-            ipv4=[data["ip"]] if data.get("ip") else [],
-            location=data.get("location", ""),
-            vm_size=data.get("vm_size", ""),
-            image_urn=data.get("image_urn", ""),
-            resource_group=data.get("resource_group", ""),
-        )
-
-
 @dataclass
 class ImageInfo:
     publisher: str

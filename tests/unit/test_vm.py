@@ -117,6 +117,18 @@ def test_lifecycle_raises_on_failure():
         vm.start()
 
 
+# ---------------------------------------------------------------- SSH
+
+def test_ssh_client_raises_timeout_when_no_ip():
+    backend = FakeBackend()
+    backend.set_default(make_ok(OUTPUT_NO_IP))
+    vm = AzureVM("my-vm", Path("/tmp/ws/my-vm"), backend)
+    with pytest.raises(AzureVmTimeoutError) as exc_info:
+        vm.exec(["ls"])
+    assert exc_info.value.name == "my-vm"
+    assert exc_info.value.timeout == 0
+
+
 # ---------------------------------------------------------------- exec
 
 @patch("azure_vm.vm.paramiko.SSHClient")
@@ -207,6 +219,22 @@ def test_transfer_sends_file(mock_ssh_client, tmp_path):
     sftp.put.assert_called_once()
 
 
+@patch("azure_vm.vm.paramiko.SSHClient")
+def test_transfer_downloads_file(mock_ssh_client, tmp_path):
+    ssh = MagicMock()
+    mock_ssh_client.return_value = ssh
+    sftp = MagicMock()
+    ssh.open_sftp.return_value = sftp
+
+    backend = FakeBackend()
+    backend.set_default(make_ok(OUTPUT_JSON))
+    vm = AzureVM("my-vm", Path("/tmp/ws/my-vm"), backend)
+
+    vm.transfer("remote:/path/to/file", str(tmp_path / "downloaded.txt"))
+
+    sftp.get.assert_called_once_with("remote:/path/to/file", str(tmp_path / "downloaded.txt"))
+
+
 # --------------------------------------------------------------- clone
 
 def test_clone_returns_new_vm():
@@ -216,6 +244,18 @@ def test_clone_returns_new_vm():
     new_vm = vm.clone("my-vm-clone")
     assert new_vm.name == "my-vm-clone"
     assert new_vm._workspace_dir == Path("/tmp/ws/my-vm-clone")
+
+
+def test_clone_copies_existing_workspace(tmp_path):
+    ws = tmp_path / "my-vm"
+    ws.mkdir(parents=True)
+    (ws / "main.tf").write_text("existing")
+    backend = FakeBackend()
+    backend.set_default(make_ok())
+    vm = AzureVM("my-vm", ws, backend)
+    new_vm = vm.clone("my-vm-clone")
+    assert (tmp_path / "my-vm-clone" / "main.tf").read_text() == "existing"
+    assert new_vm.name == "my-vm-clone"
 
 
 # --------------------------------------------------------- wait_for_ip
@@ -264,11 +304,23 @@ def test_wait_ready_returns_ip_when_ssh_reachable(mock_conn, mock_sleep):
 
 
 @patch("azure_vm.vm.time.sleep")
-@patch("azure_vm.vm.socket.create_connection", side_effect=OSError)
-def test_wait_ready_raises_timeout_when_port_unreachable(mock_conn, mock_sleep):
+def test_wait_ready_retries_on_oserror(mock_sleep):
+    backend = FakeBackend()
+    backend.set_default(make_ok(OUTPUT_WITH_IP))
+    vm = AzureVM("my-vm", Path("/tmp/ws/my-vm"), backend)
+    with patch("azure_vm.vm.time.monotonic", side_effect=[0, 1, 5, 130]):
+        with patch("azure_vm.vm.socket.create_connection", side_effect=OSError):
+            with pytest.raises(AzureVmTimeoutError):
+                vm.wait_ready(timeout=120, port=22)
+    assert mock_sleep.call_count == 2
+
+
+@patch("azure_vm.vm.time.sleep")
+def test_wait_ready_raises_timeout_when_port_unreachable(mock_sleep):
     backend = FakeBackend()
     backend.set_default(make_ok(OUTPUT_WITH_IP))
     vm = AzureVM("my-vm", Path("/tmp/ws/my-vm"), backend)
     with patch("azure_vm.vm.time.monotonic", side_effect=[0, 130]):
-        with pytest.raises(AzureVmTimeoutError):
-            vm.wait_ready(timeout=120, port=22)
+        with patch("azure_vm.vm.socket.create_connection", side_effect=OSError):
+            with pytest.raises(AzureVmTimeoutError):
+                vm.wait_ready(timeout=120, port=22)

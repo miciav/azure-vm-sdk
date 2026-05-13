@@ -52,21 +52,6 @@ def test_vminfo_from_tofu_output_unknown_state():
     assert info.state == VmState.UNKNOWN
 
 
-def test_vminfo_from_list_item():
-    item = {
-        "name": "vm-1",
-        "state": "running",
-        "ip": "10.0.0.1",
-        "location": "westeurope",
-        "vm_size": "Standard_B2s",
-        "image_urn": "Canonical:ubuntu-24_04-lts:server:latest",
-        "resource_group": "my-rg",
-    }
-    info = VmInfo.from_list_item(item)
-    assert info.name == "vm-1"
-    assert info.state == VmState.RUNNING
-
-
 AZ_IMAGE_LIST = [
     {
         "publisher": "Canonical",

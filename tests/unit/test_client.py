@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from azure_vm._backend import CommandResult, FakeBackend
 from azure_vm.client import AzureClient
-from azure_vm.exceptions import AzureVmCommandError
+from azure_vm.exceptions import AzureVmCommandError, VmNotFoundError
 from azure_vm.models import VmState
 from azure_vm.vm import AzureVM
 
@@ -28,16 +28,35 @@ def make_err(stderr: str = "error") -> CommandResult:
 
 # ------------------------------------------------------------ get_vm
 
-def test_get_vm_returns_azure_vm():
+def test_get_vm_returns_azure_vm(tmp_path):
+    ws = tmp_path / "azure-vm-sdk"
+    ws.mkdir()
+    vm_ws = ws / "my-vm"
+    vm_ws.mkdir()
+    (vm_ws / "main.tf").write_text("")
     client = AzureClient(
         resource_group="my-rg",
         location="westeurope",
-        work_dir="/tmp/ws",
+        work_dir=str(ws),
         backend=FakeBackend(),
     )
     vm = client.get_vm("my-vm")
     assert isinstance(vm, AzureVM)
     assert vm.name == "my-vm"
+
+
+def test_get_vm_raises_when_workspace_missing(tmp_path):
+    ws = tmp_path / "azure-vm-sdk"
+    ws.mkdir()
+    client = AzureClient(
+        resource_group="my-rg",
+        location="westeurope",
+        work_dir=str(ws),
+        backend=FakeBackend(),
+    )
+    with pytest.raises(VmNotFoundError) as exc_info:
+        client.get_vm("nonexistent")
+    assert exc_info.value.name == "nonexistent"
 
 
 # ------------------------------------------------------------ launch
@@ -388,16 +407,175 @@ def test_public_api_importable():
         AzureVmCommandError,
         TofuNotInstalledError,
         VmNotFoundError,
-        VmAlreadyRunningError,
-        VmNotRunningError,
         AzureVmTimeoutError,
         SshConnectionError,
         VmInfo,
         VmState,
         ImageInfo,
         CommandResult,
-        FakeBackend,
-        TofuBackend,
     )
+    from azure_vm.testing import FakeBackend
+
     assert AzureClient is not None
     assert AzureVM is not None
+    assert FakeBackend is not None
+
+
+# ------------------------------------------------------------ launch (cont.)
+
+def test_launch_with_cloud_init_raw_string(tmp_path):
+    ws = tmp_path / "azure-vm-sdk"
+    ws.mkdir()
+    backend = FakeBackend()
+    backend.set_default(make_ok())
+    client = AzureClient(
+        resource_group="my-rg",
+        location="westeurope",
+        work_dir=str(ws),
+        backend=backend,
+    )
+    client.launch(
+        name="test-vm",
+        cloud_init_config="#include\nruncmd:\n  - echo hi",
+    )
+    cloud_init = ws / "test-vm" / "cloud-init.yaml"
+    content = cloud_init.read_text()
+    assert "#include" in content
+    assert "#cloud-config" not in content
+
+
+def test_launch_with_full_image_urn(tmp_path):
+    ws = tmp_path / "azure-vm-sdk"
+    ws.mkdir()
+    backend = FakeBackend()
+    backend.set_default(make_ok())
+    client = AzureClient(
+        resource_group="my-rg",
+        location="westeurope",
+        work_dir=str(ws),
+        backend=backend,
+    )
+    client.launch(name="test-vm", image_urn="Debian:debian-12:12:latest")
+    main = (ws / "test-vm" / "main.tf").read_text()
+    assert 'publisher = "Debian"' in main
+    assert 'offer     = "debian-12"' in main
+    assert 'sku       = "12"' in main
+    assert 'version   = "latest"' in main
+
+
+def test_launch_with_partial_image_urn(tmp_path):
+    ws = tmp_path / "azure-vm-sdk"
+    ws.mkdir()
+    backend = FakeBackend()
+    backend.set_default(make_ok())
+    client = AzureClient(
+        resource_group="my-rg",
+        location="westeurope",
+        work_dir=str(ws),
+        backend=backend,
+    )
+    client.launch(name="test-vm", image_urn="Debian::bullseye:")
+    main = (ws / "test-vm" / "main.tf").read_text()
+    assert 'publisher = "Debian"' in main
+    assert 'offer     = "0001-com-ubuntu-server-noble"' in main
+    assert 'sku       = "bullseye"' in main
+    assert 'version   = "latest"' in main
+
+
+# --------------------------------------------------------------- list (cont.)
+
+def test_list_skips_dirs_without_main_tf(tmp_path):
+    ws = tmp_path / "azure-vm-sdk"
+    ws.mkdir()
+    (ws / ".shared").mkdir()
+    dir_without_tf = ws / "empty-dir"
+    dir_without_tf.mkdir()
+    backend = FakeBackend()
+    backend.set_default(make_ok())
+    client = AzureClient(
+        resource_group="my-rg",
+        location="westeurope",
+        work_dir=str(ws),
+        backend=backend,
+    )
+    vms = client.list()
+    assert len(vms) == 0
+
+
+def test_list_handles_json_decode_error(tmp_path):
+    ws = tmp_path / "azure-vm-sdk"
+    ws.mkdir()
+    (ws / ".shared").mkdir()
+    vm_ws = ws / "vm-a"
+    vm_ws.mkdir()
+    (vm_ws / "main.tf").write_text("")
+    backend = FakeBackend({
+        ("tofu", "output", "-json"): make_ok("not-valid-json"),
+    })
+    client = AzureClient(
+        resource_group="my-rg",
+        location="westeurope",
+        work_dir=str(ws),
+        backend=backend,
+    )
+    vms = client.list()
+    assert len(vms) == 0
+
+
+# -------------------------------------------------------------- purge (cont.)
+
+def test_purge_skips_non_dirs(tmp_path):
+    ws = tmp_path / "azure-vm-sdk"
+    ws.mkdir()
+    (ws / ".shared").mkdir()
+    (ws / "readme.txt").write_text("not a vm")
+    backend = FakeBackend()
+    backend.set_default(make_ok())
+    client = AzureClient(
+        resource_group="my-rg",
+        location="westeurope",
+        work_dir=str(ws),
+        backend=backend,
+    )
+    client.purge()
+    assert len(backend.calls) == 0
+
+
+def test_purge_skips_dirs_without_main_tf(tmp_path):
+    ws = tmp_path / "azure-vm-sdk"
+    ws.mkdir()
+    (ws / ".shared").mkdir()
+    (ws / "no-tf-dir").mkdir()
+    backend = FakeBackend()
+    backend.set_default(make_ok())
+    client = AzureClient(
+        resource_group="my-rg",
+        location="westeurope",
+        work_dir=str(ws),
+        backend=backend,
+    )
+    client.purge()
+    assert len(backend.calls) == 0
+
+
+# ---------------------------------------------------- ensure_running (cont.)
+
+def test_ensure_running_relaunch_on_info_error(tmp_path):
+    ws = tmp_path / "azure-vm-sdk"
+    ws.mkdir()
+    vm_ws = ws / "my-vm"
+    vm_ws.mkdir(parents=True)
+    (vm_ws / "main.tf").write_text("")
+    backend = FakeBackend({
+        ("tofu", "output", "-json"): make_err("state corrupted"),
+    })
+    backend.set_default(make_ok())
+    client = AzureClient(
+        resource_group="my-rg",
+        location="westeurope",
+        work_dir=str(ws),
+        backend=backend,
+    )
+    vm = client.ensure_running("my-vm")
+    assert vm.name == "my-vm"
+    assert any(call[1] == "apply" for call in backend.calls)

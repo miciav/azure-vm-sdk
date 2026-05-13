@@ -26,18 +26,6 @@ class VmNotFoundError(AzureVmError):
         super().__init__(f"VM '{name}' not found")
 
 
-class VmAlreadyRunningError(AzureVmError):
-    def __init__(self, name: str) -> None:
-        self.name = name
-        super().__init__(f"VM '{name}' is already running")
-
-
-class VmNotRunningError(AzureVmError):
-    def __init__(self, name: str) -> None:
-        self.name = name
-        super().__init__(f"VM '{name}' is not running")
-
-
 class AzureVmTimeoutError(AzureVmError):
     def __init__(self, name: str, timeout: float) -> None:
         self.name = name

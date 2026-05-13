@@ -3,8 +3,6 @@ from azure_vm.exceptions import (
     AzureVmCommandError,
     TofuNotInstalledError,
     VmNotFoundError,
-    VmAlreadyRunningError,
-    VmNotRunningError,
     AzureVmTimeoutError,
     SshConnectionError,
 )
@@ -14,8 +12,6 @@ def test_all_exceptions_are_subclasses_of_azure_vm_error():
     assert issubclass(AzureVmCommandError, AzureVmError)
     assert issubclass(TofuNotInstalledError, AzureVmError)
     assert issubclass(VmNotFoundError, AzureVmError)
-    assert issubclass(VmAlreadyRunningError, AzureVmError)
-    assert issubclass(VmNotRunningError, AzureVmError)
     assert issubclass(AzureVmTimeoutError, AzureVmError)
     assert issubclass(SshConnectionError, AzureVmError)
 
@@ -34,18 +30,6 @@ def test_tofu_not_installed_error_has_message():
 
 def test_vm_not_found_error_includes_name():
     err = VmNotFoundError("my-vm")
-    assert err.name == "my-vm"
-    assert "my-vm" in str(err)
-
-
-def test_vm_already_running_error_includes_name():
-    err = VmAlreadyRunningError("my-vm")
-    assert err.name == "my-vm"
-    assert "my-vm" in str(err)
-
-
-def test_vm_not_running_error_includes_name():
-    err = VmNotRunningError("my-vm")
     assert err.name == "my-vm"
     assert "my-vm" in str(err)
 

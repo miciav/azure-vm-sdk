@@ -9,9 +9,8 @@ from pathlib import Path
 
 import paramiko
 
-from ._backend import CommandBackend, CommandResult
+from ._backend import CommandBackend, CommandResult, run_command
 from .exceptions import (
-    AzureVmCommandError,
     AzureVmTimeoutError,
     SshConnectionError,
 )
@@ -34,12 +33,7 @@ class AzureVM:
         self._ssh_username = ssh_username
 
     def _run(self, args: list[str]) -> CommandResult:
-        result = self._backend.run(args, cwd=str(self._workspace_dir))
-        if not result.success:
-            raise AzureVmCommandError(
-                result.args, result.returncode, result.stdout, result.stderr
-            )
-        return result
+        return run_command(self._backend, args, cwd=str(self._workspace_dir))
 
     def _ip(self) -> str:
         result = self._run(["tofu", "output", "-json"])

@@ -39,10 +39,10 @@ class TofuBackend:
     ) -> CommandResult:
         try:
             proc = subprocess.run(args, capture_output=True, text=True, cwd=cwd, env=env)
-        except FileNotFoundError:
+        except FileNotFoundError as err:
             from .exceptions import TofuNotInstalledError
 
-            raise TofuNotInstalledError()
+            raise TofuNotInstalledError() from err
         return CommandResult(
             args=args,
             returncode=proc.returncode,
@@ -110,3 +110,20 @@ class FakeBackend:
 
     def last_env(self) -> dict[str, str] | None:
         return self._envs[-1] if self._envs else None
+
+
+def run_command(
+    backend: CommandBackend,
+    args: list[str],
+    *,
+    cwd: str | None = None,
+) -> CommandResult:
+    """Run *args* through *backend* and raise on failure."""
+    from .exceptions import AzureVmCommandError
+
+    result = backend.run(args, cwd=cwd)
+    if not result.success:
+        raise AzureVmCommandError(
+            result.args, result.returncode, result.stdout, result.stderr
+        )
+    return result
