@@ -255,9 +255,11 @@ class AzureClient:
 
         Returns the :class:`AzureVM` instance.
         """
-        if not self._resource_group:
+        if not self._resource_group or not self._location:
             raise AzureVmCommandError(
-                [], -1, "", "resource_group is required"
+                [], -1, "",
+                "resource_group and location are required — set via AzureClient() "
+                "or AZURE_RESOURCE_GROUP / AZURE_LOCATION env vars"
             )
 
         if name is None:
@@ -326,9 +328,9 @@ class AzureClient:
                 version = parts[3]
 
         # --- SSH key -------------------------------------------------------
-        effective_ssh_path = (
+        effective_ssh_path = str(Path(
             ssh_key_path or self._ssh_key_path or "~/.ssh/id_rsa.pub"
-        )
+        ).expanduser())
 
         full_urn = (
             image_urn
@@ -434,7 +436,7 @@ class AzureClient:
 
         State machine:
         - Workspace missing  : launch with provided parameters
-        - ``VmNotFoundError``,
+        - ``AzureVmCommandError``,
           ``JSONDecodeError``: re-launch
         - Running            : no-op
         - Any other          : start (Stopped, etc.)
