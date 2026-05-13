@@ -62,6 +62,7 @@ class FakeBackend:
         self._queues: dict[tuple[str, ...], list[CommandResult]] = {}
         self._calls: list[list[str]] = []
         self._cwds: list[str | None] = []
+        self._envs: list[dict[str, str] | None] = []
         self._default: CommandResult | None = None
 
     def set_default(self, result: CommandResult) -> None:
@@ -79,6 +80,7 @@ class FakeBackend:
     ) -> CommandResult:
         self._calls.append(list(args))
         self._cwds.append(cwd)
+        self._envs.append(env)
         key = tuple(args)
         if key in self._queues and self._queues[key]:
             return self._queues[key].pop(0)
@@ -101,3 +103,10 @@ class FakeBackend:
 
     def last_cwd(self) -> str | None:
         return self._cwds[-1] if self._cwds else None
+
+    @property
+    def envs(self) -> list[dict[str, str] | None]:
+        return list(self._envs)
+
+    def last_env(self) -> dict[str, str] | None:
+        return self._envs[-1] if self._envs else None
