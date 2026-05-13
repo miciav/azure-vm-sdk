@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shlex
+import shutil
 import socket
 import time
 from pathlib import Path
@@ -82,6 +83,7 @@ class AzureVM:
                 timeout=10,
             )
         except (OSError, paramiko.SSHException) as e:
+            ssh.close()
             raise SshConnectionError(self.name, ip, str(e)) from e
         return ssh
 
@@ -132,8 +134,6 @@ class AzureVM:
 
     def clone(self, new_name: str) -> "AzureVM":
         new_ws = self._workspace_dir.parent / new_name
-        import shutil
-
         if self._workspace_dir.exists():
             shutil.copytree(self._workspace_dir, new_ws, dirs_exist_ok=True)
         else:
