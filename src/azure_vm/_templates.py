@@ -19,6 +19,7 @@ terraform {{
 
 provider "azurerm" {{
   features {{}}
+  resource_provider_registrations = "none"
 }}
 
 resource "azurerm_resource_group" "main" {{
@@ -39,6 +40,7 @@ terraform {{
 
 provider "azurerm" {{
   features {{}}
+  resource_provider_registrations = "none"
 }}
 
 data "azurerm_resource_group" "main" {{
@@ -57,6 +59,29 @@ resource "azurerm_subnet" "vm" {{
   resource_group_name  = data.azurerm_resource_group.main.name
   virtual_network_name = azurerm_virtual_network.vm.name
   address_prefixes     = ["10.0.1.0/24"]
+}}
+
+resource "azurerm_network_security_group" "vm" {{
+  name                = "${{var.vm_name}}-nsg"
+  location            = data.azurerm_resource_group.main.location
+  resource_group_name = data.azurerm_resource_group.main.name
+
+  security_rule {{
+    name                       = "SSH"
+    priority                   = 1001
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    destination_port_range     = "22"
+    source_address_prefix      = "*"
+    destination_address_prefix = "*"
+  }}
+}}
+
+resource "azurerm_subnet_network_security_group_association" "vm" {{
+  subnet_id                 = azurerm_subnet.vm.id
+  network_security_group_id = azurerm_network_security_group.vm.id
 }}
 
 resource "azurerm_public_ip" "vm" {{
@@ -157,12 +182,12 @@ output "resource_group" {{
 def parse_image_urn(image_urn: str | None) -> tuple[str, str, str, str]:
     """Parse an Azure image URN into (publisher, offer, sku, version)."""
     if not image_urn:
-        return ("Canonical", "0001-com-ubuntu-server-noble", "24_04-lts", "latest")
+        return ("Canonical", "ubuntu-24_04-lts", "server", "latest")
     parts = image_urn.split(":")
     return (
         parts[0] if len(parts) > 0 and parts[0] else "Canonical",
-        parts[1] if len(parts) > 1 and parts[1] else "0001-com-ubuntu-server-noble",
-        parts[2] if len(parts) > 2 and parts[2] else "24_04-lts",
+        parts[1] if len(parts) > 1 and parts[1] else "ubuntu-24_04-lts",
+        parts[2] if len(parts) > 2 and parts[2] else "server",
         parts[3] if len(parts) > 3 and parts[3] else "latest",
     )
 
