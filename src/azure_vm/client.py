@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from ._backend import CommandBackend, TofuBackend, run_command
-from ._discovery import list_images
+from ._discovery import list_images, list_sizes as _list_sizes
 from ._workspace import Workspace
 from .exceptions import AzureVmCommandError, VmNotFoundError
-from .models import ImageInfo, VmInfo, VmState
+from .models import ImageInfo, VmConfig, VmInfo, VmSize, VmState
 from .vm import AzureVM
 
 
@@ -87,6 +88,57 @@ class AzureClient:
 
         return self.get_vm(name)
 
+    # ----------------------------------------------------------- launch_many
+
+    def launch_many(
+        self,
+        configs: list[VmConfig],
+        *,
+        max_workers: int | None = None,
+    ) -> list[AzureVM]:
+        if not configs:
+            return []
+
+        workers = max_workers if max_workers is not None else len(configs)
+        created: list[AzureVM] = []
+        first_error: BaseException | None = None
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(
+                    self.launch,
+                    name=cfg.name,
+                    vm_size=cfg.vm_size,
+                    disk_size_gb=cfg.disk_size_gb,
+                    image_urn=cfg.image_urn,
+                    cloud_init_config=cfg.cloud_init_config,
+                    ssh_key_path=cfg.ssh_key_path,
+                ): cfg
+                for cfg in configs
+            }
+
+            for fut in as_completed(futures):
+                if first_error is not None:
+                    continue
+                exc = fut.exception()
+                if exc is not None:
+                    first_error = exc
+                    for pending in futures:
+                        pending.cancel()
+                else:
+                    created.append(fut.result())
+
+        if first_error is not None:
+            with ThreadPoolExecutor(max_workers=max(len(created), 1)) as rollback:
+                for rf in [rollback.submit(vm.delete) for vm in created]:
+                    try:
+                        rf.result()
+                    except Exception:
+                        pass
+            raise first_error
+
+        return created
+
     # ---------------------------------------------------------------- list
 
     def list(self) -> list[VmInfo]:
@@ -96,6 +148,18 @@ class AzureClient:
 
     def find(self, publisher: str = "Canonical") -> list[ImageInfo]:
         return list_images(self._backend, publisher)
+
+    # ----------------------------------------------------------- list_sizes
+
+    def list_sizes(self, location: str | None = None) -> list[VmSize]:
+        loc = location or self._location
+        if not loc:
+            raise AzureVmCommandError(
+                [], -1, "",
+                "location is required — pass it or set via AzureClient() "
+                "or AZURE_LOCATION env var"
+            )
+        return _list_sizes(self._backend, loc)
 
     # --------------------------------------------------------------- purge
 

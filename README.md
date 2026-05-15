@@ -11,6 +11,73 @@ Python SDK for managing Azure VMs via OpenTofu.
 uv sync --group dev
 ```
 
+## Usage
+
+### Single VM
+
+```python
+from azure_vm import AzureClient
+
+client = AzureClient(resource_group="my-rg", location="westeurope")
+vm = client.launch(name="my-vm", vm_size="Standard_B2s")
+print(vm.info())
+vm.delete()
+```
+
+### Multiple VMs in parallel
+
+Use `launch_many` to create N VMs simultaneously. All VMs are provisioned in
+parallel; if any one fails the already-created VMs are destroyed automatically
+before the exception is re-raised (fail-fast with rollback).
+
+```python
+from azure_vm import AzureClient, VmConfig
+
+client = AzureClient(resource_group="my-rg", location="westeurope")
+
+# Different names, sizes, and images
+vms = client.launch_many([
+    VmConfig(
+        name="frontend",
+        vm_size="Standard_B1s",
+        image_urn="Canonical:0001-com-ubuntu-server-noble:24_04-lts:latest",
+    ),
+    VmConfig(
+        name="backend",
+        vm_size="Standard_B2s",
+        image_urn="Canonical:0001-com-ubuntu-server-jammy:22_04-lts:latest",
+        disk_size_gb=64,
+    ),
+    VmConfig(
+        name="db",
+        vm_size="Standard_D2s_v3",
+        disk_size_gb=128,
+    ),
+])
+
+for vm in vms:
+    print(vm.name, vm.info().ipv4)
+```
+
+`VmConfig` accepts the same keyword arguments as `launch`:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `name` | `None` (auto-generated) | VM name |
+| `vm_size` | `"Standard_B1s"` | Azure VM size |
+| `disk_size_gb` | `30` | OS disk size |
+| `image_urn` | `None` (Ubuntu 24.04 LTS) | Marketplace image URN |
+| `cloud_init_config` | `None` | cloud-init dict or YAML string |
+| `ssh_key_path` | `None` (inherits from client) | Path to SSH public key |
+
+`max_workers` caps the thread pool size (default: one thread per VM):
+
+```python
+vms = client.launch_many(configs, max_workers=4)
+```
+
+---
+
 ## End-to-end smoke test
 
 Provision a real Azure VM, wait for SSH readiness, run a verification command,
@@ -23,13 +90,23 @@ export AZURE_RESOURCE_GROUP=my-resource-group
 export AZURE_LOCATION=westeurope
 export AZURE_SSH_PUBLIC_KEY=~/.ssh/id_rsa.pub   # optional
 
-# Run with defaults
+# Run with defaults (single VM)
 uv run azure-vm-e2e
 
 # Custom VM size and image
-uv run azure-vm-e2e --name my-test-vm --vm-size Standard_D2s_v3 \\
-    --image-urn "Canonical:0001-com-ubuntu-server-noble:24_04-lts:latest" \\
+uv run azure-vm-e2e --name my-test-vm --vm-size Standard_D2s_v3 \
+    --image-urn "Canonical:0001-com-ubuntu-server-noble:24_04-lts:latest" \
     --timeout 300
+
+# Create 3 identical VMs in parallel (names: worker-0, worker-1, worker-2)
+uv run azure-vm-e2e --count 3 --name worker --vm-size Standard_B2s
+
+# Create VMs with different names, sizes, and images
+uv run azure-vm-e2e --configs '[
+  {"name": "frontend", "vm_size": "Standard_B1s"},
+  {"name": "backend",  "vm_size": "Standard_B2s", "disk_size_gb": 64},
+  {"name": "db",       "vm_size": "Standard_D2s_v3", "disk_size_gb": 128}
+]'
 ```
 
 Output shows a 5-step progress:
@@ -147,7 +224,7 @@ src/azure_vm/
 ├── _discovery.py      Azure Marketplace image discovery
 ├── _templates.py      HCL generation + image URN / SSH path helpers
 ├── _backend.py        CommandBackend protocol, TofuBackend, FakeBackend, run_command
-├── models.py          VmInfo, VmState, ImageInfo
+├── models.py          VmConfig, VmInfo, VmState, ImageInfo
 ├── exceptions.py      Exception hierarchy
 └── testing.py         Test doubles for consumers (FakeBackend, CommandResult)
 ```

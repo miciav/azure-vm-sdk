@@ -8,7 +8,7 @@ from .exceptions import (
     AzureVmTimeoutError,
     SshConnectionError,
 )
-from .models import VmInfo, VmState, ImageInfo
+from .models import VmConfig, VmInfo, VmSize, VmState, ImageInfo, VmArchitecture
 from ._backend import CommandResult
 
 __all__ = [
@@ -20,8 +20,11 @@ __all__ = [
     "VmNotFoundError",
     "AzureVmTimeoutError",
     "SshConnectionError",
+    "VmConfig",
     "VmInfo",
+    "VmSize",
     "VmState",
     "ImageInfo",
+    "VmArchitecture",
     "CommandResult",
 ]
