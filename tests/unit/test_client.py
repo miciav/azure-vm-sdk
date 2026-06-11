@@ -102,10 +102,10 @@ def test_launch_shared_infra_created_on_first_call(tmp_path):
 
 
 def test_launch_shared_infra_skipped_on_second_call(tmp_path):
+    # Shared infra is re-applied only when its rendered config CHANGES:
+    # two launches with the same config must apply it exactly once.
     ws = tmp_path / "azure-vm-sdk"
     ws.mkdir()
-    (ws / ".shared").mkdir(parents=True)
-    (ws / ".shared" / "main.tf").write_text("")
     backend = FakeBackend()
     backend.set_default(make_ok())
     client = AzureClient(
@@ -115,11 +115,12 @@ def test_launch_shared_infra_skipped_on_second_call(tmp_path):
         backend=backend,
     )
     client.launch(name="vm2")
+    client.launch(name="vm3")
     shared_apply = [
         call for call, cwd in zip(backend.calls, backend.cwds)
         if "apply" in call and cwd and ".shared" in cwd
     ]
-    assert len(shared_apply) == 0
+    assert len(shared_apply) == 1
 
 
 def test_launch_generates_random_name_when_none():
@@ -356,6 +357,7 @@ def test_ensure_running_is_noop_when_running(tmp_path):
     backend = FakeBackend({
         ("tofu", "output", "-json"): make_ok(OUTPUT_JSON),
     })
+    backend.set_default(make_ok())  # shared-infra re-render may init/apply once
     client = AzureClient(
         resource_group="my-rg",
         location="westeurope",
@@ -364,7 +366,13 @@ def test_ensure_running_is_noop_when_running(tmp_path):
     )
     vm = client.ensure_running("my-vm")
     assert vm.name == "my-vm"
-    assert not any(call[1] == "launch" for call in backend.calls)
+    # Running VM => no apply in the VM workspace (no start); the workspace
+    # files are still re-rendered from the current config.
+    vm_applies = [
+        call for call, cwd in zip(backend.calls, backend.cwds)
+        if "apply" in call and cwd == str(vm_ws)
+    ]
+    assert vm_applies == []
 
 
 def test_ensure_running_starts_stopped_vm(tmp_path):

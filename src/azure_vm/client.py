@@ -185,6 +185,29 @@ class AzureClient:
                 ssh_key_path=ssh_key_path,
             )
 
+        if not self._resource_group or not self._location:
+            raise AzureVmCommandError(
+                [], -1, "",
+                "resource_group and location are required — set via AzureClient() "
+                "or AZURE_RESOURCE_GROUP / AZURE_LOCATION env vars"
+            )
+        # Re-render the workspace from the CURRENT configuration: a pre-existing
+        # workspace must never silently pin stale parameters (e.g. an old
+        # resource group baked into main.tf by a previous run).
+        self._workspace.ensure_shared_infra(self._resource_group, self._location)
+        self._workspace.write_vm_workspace(
+            name=name,
+            vm_size=vm_size,
+            disk_size_gb=disk_size_gb,
+            image_urn=image_urn,
+            cloud_init_config=cloud_init_config,
+            ssh_key_path=ssh_key_path,
+            resource_group=self._resource_group,
+            location=self._location,
+            ssh_username=self._ssh_username,
+            default_ssh_key=self._ssh_key_path,
+        )
+
         vm = self.get_vm(name)
         try:
             info = vm.info()

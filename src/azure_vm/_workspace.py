@@ -41,13 +41,16 @@ class Workspace:
 
     def ensure_shared_infra(self, resource_group: str, location: str) -> None:
         shared = self.shared_dir()
-        if shared.exists():
-            return
-        shared.mkdir(parents=True)
         hcl = SHARED_TEMPLATE.format(
             resource_group=resource_group, location=location,
         )
-        (shared / "main.tf").write_text(hcl)
+        main_tf = shared / "main.tf"
+        # Re-render from the current configuration: an existing workspace must
+        # never silently pin stale parameters. Re-apply only on actual change.
+        if main_tf.exists() and main_tf.read_text() == hcl:
+            return
+        shared.mkdir(parents=True, exist_ok=True)
+        main_tf.write_text(hcl)
         run_command(self._backend, ["tofu", "init"], cwd=str(shared))
         run_command(self._backend, ["tofu", "apply", "-auto-approve"], cwd=str(shared))
 
