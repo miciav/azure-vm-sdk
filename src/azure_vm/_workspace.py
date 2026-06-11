@@ -52,6 +52,7 @@ class Workspace:
         shared.mkdir(parents=True, exist_ok=True)
         main_tf.write_text(hcl)
         run_command(self._backend, ["tofu", "init"], cwd=str(shared))
+        _try_import_resource_group(self._backend, shared, resource_group)
         run_command(self._backend, ["tofu", "apply", "-auto-approve"], cwd=str(shared))
 
     # --------------------------------------------------------------- vm ops
@@ -136,3 +137,36 @@ class Workspace:
                 ["tofu", "destroy", "-auto-approve"],
                 cwd=str(vm_dir_item),
             )
+
+
+def _try_import_resource_group(
+    backend: CommandBackend,
+    shared: Path,
+    resource_group: str,
+) -> None:
+    """Try to import an existing Azure resource group into Tofu state.
+
+    If the resource group already exists in Azure but is not tracked in
+    the local Tofu state (e.g. fresh workspace, or state was deleted),
+    ``tofu apply`` would fail with "already exists". Importing it first
+    makes apply a no-op.  When the import fails the resource group
+    likely does not exist yet — apply will create it.
+    """
+    # Resolve the subscription id via Azure CLI (must be authenticated).
+    result = backend.run(
+        ["az", "account", "show", "--query", "id", "-o", "tsv"],
+    )
+    if not result.success:
+        return  # can't query; let apply try anyway
+    sub_id = (result.stdout or "").strip()
+    if not sub_id:
+        return
+
+    resource_id = (
+        f"/subscriptions/{sub_id}/resourceGroups/{resource_group}"
+    )
+    # Intentionally ignore result — import is best-effort.
+    backend.run(
+        ["tofu", "import", "azurerm_resource_group.main", resource_id],
+        cwd=str(shared),
+    )
