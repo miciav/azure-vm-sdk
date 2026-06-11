@@ -13,7 +13,7 @@ OUTPUT_JSON = json.dumps({
     "vm_state": {"value": "running"},
     "location": {"value": "westeurope"},
     "vm_size": {"value": "Standard_B1s"},
-    "image_urn": {"value": "Canonical:0001-com-ubuntu-server-noble:24_04-lts:latest"},
+    "image_urn": {"value": "Canonical:ubuntu-24_04-lts:server-gen1:latest"},
     "resource_group": {"value": "my-rg"},
 })
 
@@ -249,8 +249,8 @@ def test_list_skips_shared_and_non_dirs(tmp_path):
 # --------------------------------------------------------------- find
 
 AZ_IMAGE_LIST = json.dumps([
-    {"offer": "0001-com-ubuntu-server-noble", "publisher": "Canonical",
-     "sku": "24_04-lts", "version": "latest"},
+    {"offer": "ubuntu-24_04-lts", "publisher": "Canonical",
+     "sku": "server-gen1", "version": "latest"},
 ])
 
 
@@ -267,7 +267,7 @@ def test_find_returns_image_list():
     )
     images = client.find()
     assert len(images) == 1
-    assert images[0].sku == "24_04-lts"
+    assert images[0].sku == "server-gen1"
 
 
 def test_find_with_custom_publisher():
@@ -485,7 +485,7 @@ def test_launch_with_partial_image_urn(tmp_path):
     client.launch(name="test-vm", image_urn="Debian::bullseye:")
     main = (ws / "test-vm" / "main.tf").read_text()
     assert 'publisher = "Debian"' in main
-    assert 'offer     = "0001-com-ubuntu-server-noble"' in main
+    assert 'offer     = "ubuntu-24_04-lts"' in main
     assert 'sku       = "bullseye"' in main
     assert 'version   = "latest"' in main
 

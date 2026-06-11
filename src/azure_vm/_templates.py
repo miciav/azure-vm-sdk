@@ -182,12 +182,12 @@ output "resource_group" {{
 def parse_image_urn(image_urn: str | None) -> tuple[str, str, str, str]:
     """Parse an Azure image URN into (publisher, offer, sku, version)."""
     if not image_urn:
-        return ("Canonical", "0001-com-ubuntu-server-noble", "24_04-lts", "latest")
+        return ("Canonical", "ubuntu-24_04-lts", "server-gen1", "latest")
     parts = image_urn.split(":")
     return (
         parts[0] if len(parts) > 0 and parts[0] else "Canonical",
-        parts[1] if len(parts) > 1 and parts[1] else "0001-com-ubuntu-server-noble",
-        parts[2] if len(parts) > 2 and parts[2] else "24_04-lts",
+        parts[1] if len(parts) > 1 and parts[1] else "ubuntu-24_04-lts",
+        parts[2] if len(parts) > 2 and parts[2] else "server-gen1",
         parts[3] if len(parts) > 3 and parts[3] else "latest",
     )
 

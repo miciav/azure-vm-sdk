@@ -80,7 +80,7 @@ class Workspace:
 
         full_urn = (
             image_urn
-            or "Canonical:0001-com-ubuntu-server-noble:24_04-lts:latest"
+            or "Canonical:ubuntu-24_04-lts:server-gen1:latest"
         )
 
         hcl = VM_TEMPLATE.format(

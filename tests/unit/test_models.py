@@ -6,7 +6,7 @@ TOFU_OUTPUT = {
     "vm_state": {"value": "running"},
     "location": {"value": "westeurope"},
     "vm_size": {"value": "Standard_B1s"},
-    "image_urn": {"value": "Canonical:0001-com-ubuntu-server-noble:24_04-lts:latest"},
+    "image_urn": {"value": "Canonical:ubuntu-24_04-lts:server-gen1:latest"},
     "resource_group": {"value": "my-rg"},
 }
 
@@ -30,7 +30,7 @@ def test_vminfo_from_tofu_output():
     assert info.ipv4 == ["1.2.3.4"]
     assert info.location == "westeurope"
     assert info.vm_size == "Standard_B1s"
-    assert info.image_urn == "Canonical:0001-com-ubuntu-server-noble:24_04-lts:latest"
+    assert info.image_urn == "Canonical:ubuntu-24_04-lts:server-gen1:latest"
     assert info.resource_group == "my-rg"
 
 
@@ -55,8 +55,8 @@ def test_vminfo_from_tofu_output_unknown_state():
 AZ_IMAGE_LIST = [
     {
         "publisher": "Canonical",
-        "offer": "0001-com-ubuntu-server-noble",
-        "sku": "24_04-lts",
+        "offer": "ubuntu-24_04-lts",
+        "sku": "server-gen1",
         "version": "latest",
     },
     {
@@ -72,6 +72,6 @@ def test_imageinfo_from_az_image_list():
     images = ImageInfo.from_az_image_list(AZ_IMAGE_LIST)
     assert len(images) == 2
     assert images[0].publisher == "Canonical"
-    assert images[0].offer == "0001-com-ubuntu-server-noble"
-    assert images[0].sku == "24_04-lts"
+    assert images[0].offer == "ubuntu-24_04-lts"
+    assert images[0].sku == "server-gen1"
     assert images[1].sku == "22_04-lts"

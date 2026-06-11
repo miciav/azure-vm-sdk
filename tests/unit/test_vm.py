@@ -19,7 +19,7 @@ OUTPUT_JSON = json.dumps({
     "vm_state": {"value": "running"},
     "location": {"value": "westeurope"},
     "vm_size": {"value": "Standard_B1s"},
-    "image_urn": {"value": "Canonical:0001-com-ubuntu-server-noble:24_04-lts:latest"},
+    "image_urn": {"value": "Canonical:ubuntu-24_04-lts:server-gen1:latest"},
     "resource_group": {"value": "my-rg"},
 })
 
@@ -28,7 +28,7 @@ OUTPUT_NO_IP = json.dumps({
     "vm_state": {"value": "running"},
     "location": {"value": "westeurope"},
     "vm_size": {"value": "Standard_B1s"},
-    "image_urn": {"value": "Canonical:0001-com-ubuntu-server-noble:24_04-lts:latest"},
+    "image_urn": {"value": "Canonical:ubuntu-24_04-lts:server-gen1:latest"},
     "resource_group": {"value": "my-rg"},
 })
 
@@ -37,7 +37,7 @@ OUTPUT_WITH_IP = json.dumps({
     "vm_state": {"value": "running"},
     "location": {"value": "westeurope"},
     "vm_size": {"value": "Standard_B1s"},
-    "image_urn": {"value": "Canonical:0001-com-ubuntu-server-noble:24_04-lts:latest"},
+    "image_urn": {"value": "Canonical:ubuntu-24_04-lts:server-gen1:latest"},
     "resource_group": {"value": "my-rg"},
 })
 
