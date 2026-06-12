@@ -95,6 +95,7 @@ class VmConfig:
     image_urn: str | None = None
     cloud_init_config: "dict | str | None" = None
     ssh_key_path: str | None = None
+    open_ports: tuple[int, ...] | None = None
 
 
 @dataclass

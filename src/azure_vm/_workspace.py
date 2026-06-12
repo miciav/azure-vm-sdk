@@ -9,6 +9,7 @@ from ._templates import (
     SHARED_TEMPLATE,
     VM_TEMPLATE,
     parse_image_urn,
+    render_security_rules,
     resolve_ssh_path,
     write_cloud_init,
 )
@@ -70,6 +71,7 @@ class Workspace:
         location: str,
         ssh_username: str,
         default_ssh_key: str | None = None,
+        open_ports=None,
     ) -> None:
         workspace = self.vm_dir(name)
         workspace.mkdir(parents=True, exist_ok=True)
@@ -94,6 +96,7 @@ class Workspace:
             image_version=version,
             image_urn=full_urn,
             custom_data_block=cloud_init_block,
+            extra_security_rules=render_security_rules(open_ports),
         )
         (workspace / "main.tf").write_text(hcl)
 

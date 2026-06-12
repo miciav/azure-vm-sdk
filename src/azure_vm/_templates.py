@@ -77,7 +77,7 @@ resource "azurerm_network_security_group" "vm" {{
     source_address_prefix      = "*"
     destination_address_prefix = "*"
   }}
-}}
+{extra_security_rules}}}
 
 resource "azurerm_subnet_network_security_group_association" "vm" {{
   subnet_id                 = azurerm_subnet.vm.id
@@ -212,3 +212,29 @@ def write_cloud_init(workspace: Path, config: dict | str | None) -> str:
         content = config
     (workspace / "cloud-init.yaml").write_text(content)
     return '  custom_data = filebase64("cloud-init.yaml")\n'
+
+def render_security_rules(open_ports) -> str:
+    """Extra inbound TCP allow-rules for the per-VM NSG.
+
+    Port 22 is skipped (the SSH rule is always rendered). Source is "*",
+    matching the SSH rule's posture — these are short-lived e2e VMs; source
+    restriction is a possible future enhancement.
+    """
+    rules: list[str] = []
+    for index, port in enumerate(sorted({int(p) for p in (open_ports or [])})):
+        if port == 22:
+            continue
+        rules.append(
+            "\n  security_rule {\n"
+            f'    name                       = "Port{port}"\n'
+            f"    priority                   = {1010 + index}\n"
+            '    direction                  = "Inbound"\n'
+            '    access                     = "Allow"\n'
+            '    protocol                   = "Tcp"\n'
+            '    source_port_range          = "*"\n'
+            f'    destination_port_range     = "{port}"\n'
+            '    source_address_prefix      = "*"\n'
+            '    destination_address_prefix = "*"\n'
+            "  }\n"
+        )
+    return "".join(rules)

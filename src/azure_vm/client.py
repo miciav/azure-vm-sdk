@@ -58,6 +58,7 @@ class AzureClient:
         image_urn: str | None = None,
         cloud_init_config: dict | str | None = None,
         ssh_key_path: str | None = None,
+        open_ports: list[int] | tuple[int, ...] | None = None,
     ) -> AzureVM:
         if not self._resource_group or not self._location:
             raise AzureVmCommandError(
@@ -80,6 +81,7 @@ class AzureClient:
             location=self._location,
             ssh_username=self._ssh_username,
             default_ssh_key=self._ssh_key_path,
+            open_ports=open_ports,
         )
 
         wdir = str(self._workspace.vm_dir(name))
@@ -113,6 +115,7 @@ class AzureClient:
                     image_urn=cfg.image_urn,
                     cloud_init_config=cfg.cloud_init_config,
                     ssh_key_path=cfg.ssh_key_path,
+                    open_ports=cfg.open_ports,
                 ): cfg
                 for cfg in configs
             }
@@ -177,12 +180,13 @@ class AzureClient:
         image_urn: str | None = None,
         cloud_init_config: dict | str | None = None,
         ssh_key_path: str | None = None,
+        open_ports: list[int] | tuple[int, ...] | None = None,
     ) -> AzureVM:
         if not self._workspace.vm_exists(name):
             return self.launch(
                 name=name, vm_size=vm_size, disk_size_gb=disk_size_gb,
                 image_urn=image_urn, cloud_init_config=cloud_init_config,
-                ssh_key_path=ssh_key_path,
+                ssh_key_path=ssh_key_path, open_ports=open_ports,
             )
 
         if not self._resource_group or not self._location:
@@ -206,6 +210,7 @@ class AzureClient:
             location=self._location,
             ssh_username=self._ssh_username,
             default_ssh_key=self._ssh_key_path,
+            open_ports=open_ports,
         )
 
         vm = self.get_vm(name)
@@ -215,7 +220,7 @@ class AzureClient:
             return self.launch(
                 name=name, vm_size=vm_size, disk_size_gb=disk_size_gb,
                 image_urn=image_urn, cloud_init_config=cloud_init_config,
-                ssh_key_path=ssh_key_path,
+                ssh_key_path=ssh_key_path, open_ports=open_ports,
             )
 
         if info.state == VmState.RUNNING:
