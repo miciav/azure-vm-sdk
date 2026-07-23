@@ -25,12 +25,16 @@ class AzureVM:
         backend: CommandBackend,
         ssh_key_path: str | None = None,
         ssh_username: str = "azureuser",
+        ssh_connect_timeout: float = 15.0,
+        ssh_keepalive_interval: float = 30.0,
     ) -> None:
         self.name = name
         self._workspace_dir = workspace_dir
         self._backend = backend
         self._ssh_key_path = ssh_key_path
         self._ssh_username = ssh_username
+        self._ssh_connect_timeout = ssh_connect_timeout
+        self._ssh_keepalive_interval = ssh_keepalive_interval
 
     def _run(self, args: list[str]) -> CommandResult:
         return run_command(self._backend, args, cwd=str(self._workspace_dir))
@@ -74,11 +78,19 @@ class AzureVM:
                 hostname=ip,
                 username=self._ssh_username,
                 key_filename=self._ssh_key_path,
-                timeout=10,
+                timeout=self._ssh_connect_timeout,
             )
         except (OSError, paramiko.SSHException) as e:
             ssh.close()
             raise SshConnectionError(self.name, ip, str(e)) from e
+        # Enable keepalive so a silently-dropped connection surfaces as an
+        # error within a few missed probes instead of blocking forever in
+        # recv_exit_status(). Long-lived commands (load tests, image builds)
+        # over cloud NAT otherwise hang indefinitely on a dead peer.
+        if self._ssh_keepalive_interval > 0:
+            transport = ssh.get_transport()
+            if transport is not None:
+                transport.set_keepalive(self._ssh_keepalive_interval)
         return ssh
 
     def exec(self, command: list[str]) -> CommandResult:

@@ -24,12 +24,16 @@ class AzureClient:
         backend: CommandBackend | None = None,
         ssh_key_path: str | None = None,
         ssh_username: str = "azureuser",
+        ssh_connect_timeout: float = 15.0,
+        ssh_keepalive_interval: float = 30.0,
     ) -> None:
         self._resource_group = resource_group
         self._location = location
         self._backend: CommandBackend = backend or TofuBackend()
         self._ssh_key_path = ssh_key_path
         self._ssh_username = ssh_username
+        self._ssh_connect_timeout = ssh_connect_timeout
+        self._ssh_keepalive_interval = ssh_keepalive_interval
 
         root = Path(work_dir) if work_dir else Path.home() / ".azure-vm-sdk"
         self._workspace = Workspace(root, self._backend)
@@ -45,6 +49,8 @@ class AzureClient:
             self._backend,
             self._ssh_key_path,
             self._ssh_username,
+            ssh_connect_timeout=self._ssh_connect_timeout,
+            ssh_keepalive_interval=self._ssh_keepalive_interval,
         )
 
     # --------------------------------------------------------------- launch

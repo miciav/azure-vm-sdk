@@ -152,10 +152,60 @@ def test_exec_runs_command_over_ssh(mock_ssh_client):
         hostname="1.2.3.4",
         username="azureuser",
         key_filename="/key.pem",
-        timeout=10,
+        timeout=15.0,
     )
+    # a silent peer drop must surface, not hang: keepalive is enabled
+    ssh.get_transport.return_value.set_keepalive.assert_called_once_with(30.0)
     assert result.stdout == "hello\n"
     assert result.success is True
+
+
+@patch("azure_vm.vm.paramiko.SSHClient")
+def test_exec_honours_custom_ssh_timeouts(mock_ssh_client):
+    ssh = MagicMock()
+    mock_ssh_client.return_value = ssh
+    stdout = MagicMock()
+    stdout.read.return_value = b""
+    stdout.channel.recv_exit_status.return_value = 0
+    ssh.exec_command.return_value = (MagicMock(), stdout, MagicMock())
+
+    backend = FakeBackend()
+    backend.set_default(make_ok(OUTPUT_JSON))
+    vm = AzureVM(
+        "my-vm",
+        Path("/tmp/ws/my-vm"),
+        backend,
+        ssh_key_path="/key.pem",
+        ssh_connect_timeout=5.0,
+        ssh_keepalive_interval=7.0,
+    )
+    vm.exec(["true"])
+
+    assert ssh.connect.call_args.kwargs["timeout"] == 5.0
+    ssh.get_transport.return_value.set_keepalive.assert_called_once_with(7.0)
+
+
+@patch("azure_vm.vm.paramiko.SSHClient")
+def test_exec_skips_keepalive_when_disabled(mock_ssh_client):
+    ssh = MagicMock()
+    mock_ssh_client.return_value = ssh
+    stdout = MagicMock()
+    stdout.read.return_value = b""
+    stdout.channel.recv_exit_status.return_value = 0
+    ssh.exec_command.return_value = (MagicMock(), stdout, MagicMock())
+
+    backend = FakeBackend()
+    backend.set_default(make_ok(OUTPUT_JSON))
+    vm = AzureVM(
+        "my-vm",
+        Path("/tmp/ws/my-vm"),
+        backend,
+        ssh_key_path="/key.pem",
+        ssh_keepalive_interval=0,
+    )
+    vm.exec(["true"])
+
+    ssh.get_transport.return_value.set_keepalive.assert_not_called()
 
 
 @patch("azure_vm.vm.paramiko.SSHClient")
