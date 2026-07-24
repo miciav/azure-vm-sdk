@@ -27,6 +27,7 @@ class AzureVM:
         ssh_username: str = "azureuser",
         ssh_connect_timeout: float = 15.0,
         ssh_keepalive_interval: float = 30.0,
+        ssh_client_id: str | None = "OpenSSH_9.6p1",
     ) -> None:
         self.name = name
         self._workspace_dir = workspace_dir
@@ -35,6 +36,7 @@ class AzureVM:
         self._ssh_username = ssh_username
         self._ssh_connect_timeout = ssh_connect_timeout
         self._ssh_keepalive_interval = ssh_keepalive_interval
+        self._ssh_client_id = ssh_client_id
 
     def _run(self, args: list[str]) -> CommandResult:
         return run_command(self._backend, args, cwd=str(self._workspace_dir))
@@ -71,6 +73,16 @@ class AzureVM:
         ip = self._ip()
         if not ip:
             raise AzureVmTimeoutError(self.name, 0)
+        # Announce an OpenSSH-style client identifier. Corporate SSH-inspecting
+        # firewalls/IPS commonly allow-list known clients and RST the banner of
+        # non-OpenSSH ones (paramiko's default "SSH-2.0-paramiko_x.y" gets reset
+        # while the system `ssh` connects fine). _CLIENT_ID is the class field
+        # paramiko interpolates into local_version; overriding it before the
+        # handshake makes paramiko present as "SSH-2.0-OpenSSH_...".
+        if self._ssh_client_id is not None:
+            # paramiko exposes no public API for the client id; this class
+            # field is the documented override point.
+            paramiko.Transport._CLIENT_ID = self._ssh_client_id  # type: ignore[attr-defined]  # noqa: SLF001
         ssh = paramiko.SSHClient()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:

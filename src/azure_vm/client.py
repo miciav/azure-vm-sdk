@@ -26,6 +26,7 @@ class AzureClient:
         ssh_username: str = "azureuser",
         ssh_connect_timeout: float = 15.0,
         ssh_keepalive_interval: float = 30.0,
+        ssh_client_id: str | None = "OpenSSH_9.6p1",
     ) -> None:
         self._resource_group = resource_group
         self._location = location
@@ -34,6 +35,7 @@ class AzureClient:
         self._ssh_username = ssh_username
         self._ssh_connect_timeout = ssh_connect_timeout
         self._ssh_keepalive_interval = ssh_keepalive_interval
+        self._ssh_client_id = ssh_client_id
 
         root = Path(work_dir) if work_dir else Path.home() / ".azure-vm-sdk"
         self._workspace = Workspace(root, self._backend)
@@ -51,6 +53,7 @@ class AzureClient:
             self._ssh_username,
             ssh_connect_timeout=self._ssh_connect_timeout,
             ssh_keepalive_interval=self._ssh_keepalive_interval,
+            ssh_client_id=self._ssh_client_id,
         )
 
     # --------------------------------------------------------------- launch

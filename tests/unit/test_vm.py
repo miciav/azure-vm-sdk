@@ -160,6 +160,46 @@ def test_exec_runs_command_over_ssh(mock_ssh_client):
     assert result.success is True
 
 
+@patch("azure_vm.vm.paramiko.Transport")
+@patch("azure_vm.vm.paramiko.SSHClient")
+def test_exec_announces_an_openssh_client_banner_by_default(mock_ssh_client, mock_transport):
+    ssh = MagicMock()
+    mock_ssh_client.return_value = ssh
+    stdout = MagicMock()
+    stdout.read.return_value = b""
+    stdout.channel.recv_exit_status.return_value = 0
+    ssh.exec_command.return_value = (MagicMock(), stdout, MagicMock())
+
+    backend = FakeBackend()
+    backend.set_default(make_ok(OUTPUT_JSON))
+    AzureVM("my-vm", Path("/tmp/ws/my-vm"), backend, ssh_key_path="/key.pem").exec(["true"])
+
+    # SSH-inspecting firewalls RST non-OpenSSH clients; paramiko must present
+    # as OpenSSH via Transport._CLIENT_ID before the handshake.
+    assert mock_transport._CLIENT_ID == "OpenSSH_9.6p1"
+
+
+@patch("azure_vm.vm.paramiko.Transport")
+@patch("azure_vm.vm.paramiko.SSHClient")
+def test_exec_leaves_the_client_banner_untouched_when_disabled(mock_ssh_client, mock_transport):
+    original = object()
+    mock_transport._CLIENT_ID = original
+    ssh = MagicMock()
+    mock_ssh_client.return_value = ssh
+    stdout = MagicMock()
+    stdout.read.return_value = b""
+    stdout.channel.recv_exit_status.return_value = 0
+    ssh.exec_command.return_value = (MagicMock(), stdout, MagicMock())
+
+    backend = FakeBackend()
+    backend.set_default(make_ok(OUTPUT_JSON))
+    AzureVM(
+        "my-vm", Path("/tmp/ws/my-vm"), backend, ssh_key_path="/key.pem", ssh_client_id=None
+    ).exec(["true"])
+
+    assert mock_transport._CLIENT_ID is original
+
+
 @patch("azure_vm.vm.paramiko.SSHClient")
 def test_exec_honours_custom_ssh_timeouts(mock_ssh_client):
     ssh = MagicMock()
