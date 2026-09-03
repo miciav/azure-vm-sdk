@@ -85,6 +85,10 @@ class AzureVM:
             ):
                 return self._ssh
             self.close()
+        self._ssh = self._connect_ssh()
+        return self._ssh
+
+    def _connect_ssh(self) -> paramiko.SSHClient:
         ip = self._ip()
         if not ip:
             raise AzureVmTimeoutError(self.name, 0)
@@ -118,7 +122,6 @@ class AzureVM:
             transport = ssh.get_transport()
             if transport is not None:
                 transport.set_keepalive(self._ssh_keepalive_interval)
-        self._ssh = ssh
         return ssh
 
     def exec(self, command: list[str]) -> CommandResult:
@@ -153,22 +156,18 @@ class AzureVM:
         return self.exec(["bash", "-lc", command])
 
     def transfer(self, source: str, dest: str) -> None:
-        ssh = self._ssh_client()
+        ssh = self._connect_ssh()
         try:
             sftp = ssh.open_sftp()
-        except (EOFError, OSError, paramiko.SSHException):
-            self.close()
-            raise
-        try:
-            if ":" in source:
-                sftp.get(source, dest)
-            else:
-                sftp.put(source, dest)
-        except (EOFError, OSError, paramiko.SSHException):
-            self.close()
-            raise
+            try:
+                if ":" in source:
+                    sftp.get(source, dest)
+                else:
+                    sftp.put(source, dest)
+            finally:
+                sftp.close()
         finally:
-            sftp.close()
+            ssh.close()
 
     # --------------------------------------------------------------- clone
 

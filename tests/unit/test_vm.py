@@ -365,6 +365,30 @@ def test_exec_structured_builds_bash_command(mock_ssh_client):
 # ------------------------------------------------------------- transfer
 
 @patch("azure_vm.vm.paramiko.SSHClient")
+def test_transfer_uses_a_dedicated_connection(mock_ssh_client, tmp_path):
+    command_ssh = MagicMock()
+    stdout = MagicMock()
+    stdout.read.return_value = b""
+    stdout.channel.recv_exit_status.return_value = 0
+    command_ssh.exec_command.return_value = (MagicMock(), stdout, MagicMock())
+    transfer_ssh = MagicMock()
+    mock_ssh_client.side_effect = (command_ssh, transfer_ssh)
+
+    backend = FakeBackend()
+    backend.set_default(make_ok(OUTPUT_JSON))
+    vm = AzureVM("my-vm", Path("/tmp/ws/my-vm"), backend)
+
+    vm.exec(["true"])
+    vm.transfer(str(tmp_path / "file"), "/remote/file")
+
+    assert mock_ssh_client.call_count == 2
+    command_ssh.open_sftp.assert_not_called()
+    command_ssh.close.assert_not_called()
+    transfer_ssh.open_sftp.assert_called_once_with()
+    transfer_ssh.close.assert_called_once_with()
+
+
+@patch("azure_vm.vm.paramiko.SSHClient")
 def test_transfer_discards_a_connection_that_fails(mock_ssh_client, tmp_path):
     ssh = MagicMock()
     sftp = ssh.open_sftp.return_value
