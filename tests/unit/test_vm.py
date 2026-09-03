@@ -147,7 +147,9 @@ def test_exec_runs_command_over_ssh(mock_ssh_client):
     backend.set_default(make_ok(OUTPUT_JSON))
     vm = AzureVM("my-vm", Path("/tmp/ws/my-vm"), backend, ssh_key_path="/key.pem")
     result = vm.exec(["ls", "-la"])
+    second = vm.exec(["pwd"])
 
+    mock_ssh_client.assert_called_once_with()
     ssh.connect.assert_called_once_with(
         hostname="1.2.3.4",
         username="azureuser",
@@ -158,6 +160,77 @@ def test_exec_runs_command_over_ssh(mock_ssh_client):
     ssh.get_transport.return_value.set_keepalive.assert_called_once_with(30.0)
     assert result.stdout == "hello\n"
     assert result.success is True
+    assert second.success is True
+    ssh.close.assert_not_called()
+
+
+@patch("azure_vm.vm.paramiko.SSHClient")
+def test_exec_reconnects_when_the_cached_transport_is_inactive(mock_ssh_client):
+    first = MagicMock()
+    first.get_transport.return_value.is_active.return_value = False
+    second = MagicMock()
+    second.get_transport.return_value.is_active.return_value = True
+    second.get_transport.return_value.is_authenticated.return_value = True
+    for ssh in (first, second):
+        stdout = MagicMock()
+        stdout.read.return_value = b""
+        stdout.channel.recv_exit_status.return_value = 0
+        ssh.exec_command.return_value = (MagicMock(), stdout, MagicMock())
+    mock_ssh_client.side_effect = (first, second)
+
+    backend = FakeBackend()
+    backend.set_default(make_ok(OUTPUT_JSON))
+    vm = AzureVM("my-vm", Path("/tmp/ws/my-vm"), backend)
+
+    vm.exec(["true"])
+    vm.exec(["true"])
+
+    assert mock_ssh_client.call_count == 2
+    first.close.assert_called_once_with()
+    second.close.assert_not_called()
+
+
+@patch("azure_vm.vm.paramiko.SSHClient")
+def test_close_discards_the_cached_connection(mock_ssh_client):
+    ssh = MagicMock()
+    stdout = MagicMock()
+    stdout.read.return_value = b""
+    stdout.channel.recv_exit_status.return_value = 0
+    ssh.exec_command.return_value = (MagicMock(), stdout, MagicMock())
+    mock_ssh_client.return_value = ssh
+
+    backend = FakeBackend()
+    backend.set_default(make_ok(OUTPUT_JSON))
+    vm = AzureVM("my-vm", Path("/tmp/ws/my-vm"), backend)
+    vm.exec(["true"])
+
+    vm.close()
+    vm.close()
+
+    ssh.close.assert_called_once_with()
+
+
+@patch("azure_vm.vm.paramiko.SSHClient")
+def test_exec_discards_a_connection_that_fails_during_command(mock_ssh_client):
+    failed = MagicMock()
+    failed.exec_command.side_effect = OSError("connection reset")
+    recovered = MagicMock()
+    stdout = MagicMock()
+    stdout.read.return_value = b""
+    stdout.channel.recv_exit_status.return_value = 0
+    recovered.exec_command.return_value = (MagicMock(), stdout, MagicMock())
+    mock_ssh_client.side_effect = (failed, recovered)
+
+    backend = FakeBackend()
+    backend.set_default(make_ok(OUTPUT_JSON))
+    vm = AzureVM("my-vm", Path("/tmp/ws/my-vm"), backend)
+
+    with pytest.raises(OSError, match="connection reset"):
+        vm.exec(["true"])
+    vm.exec(["true"])
+
+    failed.close.assert_called_once_with()
+    assert mock_ssh_client.call_count == 2
 
 
 @patch("azure_vm.vm.paramiko.Transport")
@@ -290,6 +363,23 @@ def test_exec_structured_builds_bash_command(mock_ssh_client):
 
 
 # ------------------------------------------------------------- transfer
+
+@patch("azure_vm.vm.paramiko.SSHClient")
+def test_transfer_discards_a_connection_that_fails(mock_ssh_client, tmp_path):
+    ssh = MagicMock()
+    sftp = ssh.open_sftp.return_value
+    sftp.put.side_effect = OSError("connection reset")
+    mock_ssh_client.return_value = ssh
+
+    backend = FakeBackend()
+    backend.set_default(make_ok(OUTPUT_JSON))
+    vm = AzureVM("my-vm", Path("/tmp/ws/my-vm"), backend)
+
+    with pytest.raises(OSError, match="connection reset"):
+        vm.transfer(str(tmp_path / "file"), "/remote/file")
+
+    sftp.close.assert_called_once_with()
+    ssh.close.assert_called_once_with()
 
 @patch("azure_vm.vm.paramiko.SSHClient")
 def test_transfer_sends_file(mock_ssh_client, tmp_path):

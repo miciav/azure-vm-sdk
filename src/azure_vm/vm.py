@@ -37,6 +37,7 @@ class AzureVM:
         self._ssh_connect_timeout = ssh_connect_timeout
         self._ssh_keepalive_interval = ssh_keepalive_interval
         self._ssh_client_id = ssh_client_id
+        self._ssh: paramiko.SSHClient | None = None
 
     def _run(self, args: list[str]) -> CommandResult:
         return run_command(self._backend, args, cwd=str(self._workspace_dir))
@@ -69,7 +70,21 @@ class AzureVM:
 
     # ---------------------------------------------------------------- SSH
 
+    def close(self) -> None:
+        if self._ssh is not None:
+            self._ssh.close()
+            self._ssh = None
+
     def _ssh_client(self) -> paramiko.SSHClient:
+        if self._ssh is not None:
+            transport = self._ssh.get_transport()
+            if (
+                transport is not None
+                and transport.is_active()
+                and transport.is_authenticated()
+            ):
+                return self._ssh
+            self.close()
         ip = self._ip()
         if not ip:
             raise AzureVmTimeoutError(self.name, 0)
@@ -103,6 +118,7 @@ class AzureVM:
             transport = ssh.get_transport()
             if transport is not None:
                 transport.set_keepalive(self._ssh_keepalive_interval)
+        self._ssh = ssh
         return ssh
 
     def exec(self, command: list[str]) -> CommandResult:
@@ -110,15 +126,15 @@ class AzureVM:
         try:
             _, stdout, stderr = ssh.exec_command(shlex.join(command))
             exit_status = stdout.channel.recv_exit_status()
-            result = CommandResult(
+            return CommandResult(
                 args=command,
                 returncode=exit_status,
                 stdout=stdout.read().decode("utf-8", errors="replace"),
                 stderr=stderr.read().decode("utf-8", errors="replace"),
             )
-            return result
-        finally:
-            ssh.close()
+        except (EOFError, OSError, paramiko.SSHException):
+            self.close()
+            raise
 
     def exec_structured(
         self,
@@ -140,13 +156,19 @@ class AzureVM:
         ssh = self._ssh_client()
         try:
             sftp = ssh.open_sftp()
+        except (EOFError, OSError, paramiko.SSHException):
+            self.close()
+            raise
+        try:
             if ":" in source:
                 sftp.get(source, dest)
             else:
                 sftp.put(source, dest)
-            sftp.close()
+        except (EOFError, OSError, paramiko.SSHException):
+            self.close()
+            raise
         finally:
-            ssh.close()
+            sftp.close()
 
     # --------------------------------------------------------------- clone
 
